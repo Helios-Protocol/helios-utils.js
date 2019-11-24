@@ -1,9 +1,11 @@
 
 class ConnectionMaintainer {
     constructor(web3, availableNodes, disconnectedLoopPeriod, connectedLoopPeriod) {
+        this.networkId = 1;
         this.wasConnected = false;
-        this.availableNodes = availableNodes;
+        this.availableNodes = availableNodes
         this.web3 = web3;
+
 
         //The period of time between each retry when we are disconnected.
         if(disconnectedLoopPeriod === undefined){
@@ -41,6 +43,12 @@ class ConnectionMaintainer {
         this.statusCallback(this.status, this.isConnected());
     }
 
+    setNetworkIdAndReconnect(networkId){
+        console.log('setting networkId to '+networkId);
+        this.networkId = networkId;
+        this.connectToFirstAvailableNode();
+    }
+
     setStatus(status){
         this.status = status;
         console.log(status);
@@ -62,7 +70,7 @@ class ConnectionMaintainer {
         }else{
             console.log("Attempting to connect to node");
             //this.setStatus('Connection to network failed. Retrying connection.');
-            this.setStatus('Not connected. Helios network is undergoing maintenance.');
+            this.setStatus('Not connected. The selected network is undergoing maintenance.');
             await this.connectToFirstAvailableNode();
         }
 
@@ -90,19 +98,25 @@ class ConnectionMaintainer {
 
 
     async connectToFirstAvailableNode(){
-        for(var i=0;i<this.availableNodes.length;i++) {
-            var API_address = this.availableNodes[i];
-            console.log("Connecting to node " + API_address)
-            this.web3.setProvider(new this.web3.providers.WebsocketProvider(API_address));
-            await sleep(1000);
+        if(this.networkId in this.availableNodes){
+            for (var i = 0; i < this.availableNodes[this.networkId].length; i++) {
+                var API_address = this.availableNodes[this.networkId][i];
+                console.log("Connecting to node " + API_address);
+                this.web3.setProvider(new this.web3.providers.WebsocketProvider(API_address));
+                await sleep(1000);
 
-            if(this.isConnected()) {
-                console.log("Successfully connected to " + API_address)
-                return true;
+                if (this.isConnected()) {
+                    console.log("Successfully connected to " + API_address)
+                    return true;
+                }
+                console.log("Failed to connect to node " + API_address)
             }
-            console.log("Failed to connect to node " + API_address)
+            return false;
+        }else{
+            console.log("No nodes found with network id " + this.networkId)
+            return false;
         }
-        return false
+
     }
 
 }

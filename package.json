@@ -4,6 +4,7 @@
   "description": "Javascript utilities for Helios Protocol",
   "main": "index.js",
   "dependencies": {
+    "await-lock": "^2.0.1",
     "bcryptjs": "^2.4.3",
     "superagent": "^4.1.0",
     "superagent-no-cache": "^0.1.1"
