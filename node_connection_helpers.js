@@ -1,3 +1,7 @@
+networkIDToName = {
+    1: "Mainnet",
+    42: "Hypothesis Testnet"
+}
 
 class ConnectionMaintainer {
     constructor(web3, availableNodes, disconnectedLoopPeriod, connectedLoopPeriod) {
@@ -6,6 +10,7 @@ class ConnectionMaintainer {
         this.availableNodes = availableNodes
         this.web3 = web3;
 
+        this.WSConnectTimeout = 5000;
 
         //The period of time between each retry when we are disconnected.
         if(disconnectedLoopPeriod === undefined){
@@ -37,16 +42,23 @@ class ConnectionMaintainer {
     }
 
 
+
     setStatusCallback(statusCallback){
-        console.log('setting callback');
         this.statusCallback = statusCallback;
         this.statusCallback(this.status, this.isConnected());
     }
 
     setNetworkIdAndReconnect(networkId){
-        console.log('setting networkId to '+networkId);
+        console.log('Setting networkId to '+networkId);
         this.networkId = networkId;
-        this.connectToFirstAvailableNode();
+
+        if(this.isConnected()) {
+            // Disconnect from node, and then the onClose will be called, automatically reconnecting with new network id.
+            console.log("Disconnecting from current node.")
+            this.web3.currentProvider.disconnect();
+        }else{
+            this.connectToNetwork();
+        }
     }
 
     setStatus(status){
@@ -57,69 +69,97 @@ class ConnectionMaintainer {
         }
     }
 
-    startNetworkConnectionMaintainerLoop(){
-        this.networkConnectionMaintainerLoop()
-    }
-
-
-    async networkConnectionMaintainerLoop(){
-        console.log("network connection loop begin");
-        if(this.isConnected()) {
-            console.log("Pinging ws server for keepalive");
-            await this.web3.hls.ping();
-        }else{
-            console.log("Attempting to connect to node");
-            //this.setStatus('Connection to network failed. Retrying connection.');
+    setCurrentStatus(isConnected) {
+        if(isConnected){
+            this.setStatus('Connected to node ' + this.web3.currentProvider.connection.url + " on " + networkIDToName[this.networkId]);
+        }
+        else{
             this.setStatus('Not connected. The selected network is undergoing maintenance.');
-            await this.connectToFirstAvailableNode();
-        }
-
-
-
-        if(this.isConnected()){
-            if(!this.wasConnected){
-                if(this.connectedCallback !== undefined){
-                    this.connectedCallback();
-                }
-
-            }
-            this.setStatus('Connected to node ' + this.web3.currentProvider.connection.url);
-            await sleep(this.connectedLoopPeriod);
-            this.networkConnectionMaintainerLoop();
-            this.wasConnected = true;
-        }else{
-            console.log("Connection to node failed. Will retry in "+ this.disconnectedLoopPeriod/1000 + " seconds.")
-            await sleep(this.disconnectedLoopPeriod);
-            this.networkConnectionMaintainerLoop();
-            this.wasConnected = false;
         }
     }
 
+    startNetworkConnectionMaintainerLoop(){
+        this.connectToNetwork();
+    }
 
+
+    async connectToNetwork(){
+        console.log("Initiating connection to network");
+        if(this.isConnected()) {
+            console.log("Already connected to network. Doing nothing.");
+        }else{
+            console.log("No active connection found. Starting new one.");
+            var isConnected = await this.connectToFirstAvailableNode();
+            this.setCurrentStatus(isConnected);
+            if(this.connectedCallback !== undefined){
+                this.connectedCallback();
+            }
+        }
+    }
 
     async connectToFirstAvailableNode(){
+        var _this = this;
         if(this.networkId in this.availableNodes){
             for (var i = 0; i < this.availableNodes[this.networkId].length; i++) {
                 var API_address = this.availableNodes[this.networkId][i];
-                console.log("Connecting to node " + API_address);
-                this.web3.setProvider(new this.web3.providers.WebsocketProvider(API_address));
-                await sleep(1000);
+                try {
+                    var newProvider = await this.connectToWebsocketProvider(API_address);
+                    this.web3.setProvider(newProvider);
+                    console.log("Successfully connected to " + API_address);
 
-                if (this.isConnected()) {
-                    console.log("Successfully connected to " + API_address)
+                    // Set close callback. Tell it to reconnect to network with first available node.
+                    newProvider.on('end', function(){
+                        console.log("Provider closed. Reconnecting to network");
+                        _this.connectToNetwork();
+                    })
+
                     return true;
+
+                } catch(err) {
+                    console.log("Failed to connect to node " + API_address);
                 }
-                console.log("Failed to connect to node " + API_address)
+
             }
             return false;
         }else{
-            console.log("No nodes found with network id " + this.networkId)
+            console.log("No nodes found with network id " + this.networkId);
             return false;
         }
 
     }
 
+    connectToWebsocketProvider(API_address) {
+        return new Promise((resolve, reject) => {
+            console.log("Connecting to node " + API_address);
+            var newProvider = new this.web3.providers.WebsocketProvider(API_address)
+
+            // Add timeout
+            var timeout = setTimeout(function(){
+                // Cancel the connection
+                console.log("Timeout on connection for "+ API_address);
+                newProvider.disconnect();
+                reject();
+            }, this.WSConnectTimeout);
+
+            // Add connected callback
+            newProvider.on('connect', function(){
+                clearTimeout(timeout);
+                console.log("onOpen event fired for "+ API_address);
+                resolve(newProvider);
+            })
+
+            // Check to make sure we havent already connected before we added the callback
+            if(newProvider.connected){
+                clearTimeout(timeout);
+                console.log("connected fired for "+ API_address);
+                resolve(newProvider);
+            }
+        });
+    }
+
+
 }
+
 var getNodeMessageFromError = function getNodeMessageFromError(error) {
 
     if (error.message.indexOf('Returned error: ') !== -1) {
