@@ -4,8 +4,13 @@ networkIDToName = {
 }
 
 class ConnectionMaintainer {
-    constructor(web3, availableNodes, connectionFailureRetryPeriod) {
-        this.networkId = 1;
+    constructor(web3, availableNodes, connectionFailureRetryPeriod, networkId) {
+        if(networkId === undefined){
+            this.networkId = 1;
+        }else{
+            this.networkId = parseInt(networkId);
+        }
+
         this.wasConnected = false;
         this.availableNodes = availableNodes
         this.web3 = web3;
@@ -100,6 +105,7 @@ class ConnectionMaintainer {
 
     async connectToFirstAvailableNode(){
         var _this = this;
+        console.log("Connecting to nodes on network id "+ this.networkId);
         if(this.networkId in this.availableNodes){
             for (var i = 0; i < this.availableNodes[this.networkId].length; i++) {
                 var API_address = this.availableNodes[this.networkId][i];
