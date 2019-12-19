@@ -1,7 +1,8 @@
 {
   "name": "helios-utils",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Javascript utilities for Helios Protocol",
+  "homepage": "https://github.com/Helios-Protocol/helios-utils.js",
   "main": "index.js",
   "dependencies": {
     "await-lock": "^2.0.1",
@@ -11,6 +12,6 @@
   },
   "devDependencies": {},
   "scripts": {},
-  "author": "Tommy Mckinnon",
+  "author": "Tommy Mckinnon <tommy@heliosprotocol.io> (https://heliosprotocol.io)",
   "license": "MIT"
 }
